@@ -36,9 +36,6 @@
 int main()
 {
 	HAL_Init();
-	SPI_init();
-	TIM2_init();
-
 
 	while (true) {
 		// SPI_send_data(0b111111111111);
