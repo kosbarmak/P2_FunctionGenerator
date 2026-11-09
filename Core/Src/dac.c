@@ -15,6 +15,10 @@ struct interrupt_handler_functions {
 
 // different wave select functions will alter this global struct
 static struct interrupt_handler_functions callbacks;
+//--------------------------------------------------
+// wave generation globals
+uint32_t auto_reload_register;
+uint32_t capture_compare_register;
 
 //--------------------------------------------------
 // other globals
@@ -33,9 +37,17 @@ void TIM2_start(uint32_t prescaler, uint32_t auto_reload_register, uint32_t capt
 void SPI_send_data(uint16_t value);
 uint16_t SPI_volt_convert(float voltOut);
 void dac_send(float voltOut);
+void SPI_init();
+void TIM2_init();
 
 //--------------------------------------------------
 // interface
+
+void dac_init() 
+{
+	SPI_init();
+	TIM2_init();
+}
 
 void dac_start(uint16_t frequency_hz, uint8_t percent_duty)
 {
@@ -43,9 +55,9 @@ void dac_start(uint16_t frequency_hz, uint8_t percent_duty)
 	uint32_t prescaler = 0;
 
 	// how many clock ticks until the desired period is reached? subtract 1 due to 0-indexing of CNT
-	uint32_t auto_reload_register = CLOCK_FREQUENCY / frequency_hz - 1;
+	auto_reload_register = CLOCK_FREQUENCY / frequency_hz - 1;
 
-	uint32_t capture_compare_register = (auto_reload_register + 1) * percent_duty / 100;
+	capture_compare_register = (auto_reload_register + 1) * percent_duty / 100;
 
 	TIM2_start(prescaler, auto_reload_register, capture_compare_register);
 
@@ -62,7 +74,7 @@ void sawtooth_wave_on_uif()
 
 void sawtooth_wave_on_ccr1()
 {
-	
+
 }
 
 void dac_send(float voltOut)
@@ -150,6 +162,9 @@ void TIM2_start(uint32_t prescaler, uint32_t auto_reload_register, uint32_t capt
 
 	// enable
 	TIM2->CR1 |= TIM_CR1_CEN_Msk;
+}
+
+void TIM2_ccr1_set(uint32_t ) {
 }
 
 void TIM2_init()
