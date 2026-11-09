@@ -1,3 +1,5 @@
+#include "dac.h"
+
 #include "stdbool.h"
 #include "stm32l476xx.h"
 #include "stm32l4xx_hal.h"
@@ -17,12 +19,18 @@ struct interrupt_handler_functions {
 static struct interrupt_handler_functions callbacks;
 //--------------------------------------------------
 // wave generation globals
-uint32_t auto_reload_register;
-uint32_t capture_compare_register;
+
+static int n_steps;
+static int CCR1_increment;
+static int voltage_increment;
+static int current_step;
 
 //--------------------------------------------------
 // other globals
 static const int CLOCK_FREQUENCY = 4000000;
+
+// from the example: 1 step per 1ms = 1/0.001s = 1000/s = 1000 Hz
+static const int STEPS_PER_SECOND = 1000;
 
 static const float DC_BIAS = 1.5f;
 static const float V_PEAK_TO_PEAK = 3.0f;
@@ -39,42 +47,65 @@ uint16_t SPI_volt_convert(float voltOut);
 void dac_send(float voltOut);
 void SPI_init();
 void TIM2_init();
+void TIM2_ccr1_increment();
+void TIM2_CCR1_reset();
+void sawtooth_wave_on_uif();
+void sawtooth_wave_on_ccr1();
 
 //--------------------------------------------------
 // interface
 
-void dac_init() 
+void dac_init()
 {
 	SPI_init();
 	TIM2_init();
 }
 
-void dac_start(uint16_t frequency_hz, uint8_t percent_duty)
+void dac_start(WaveType type, uint16_t frequency_hz, uint8_t percent_duty)
 {
 	// keep the update frequency at its smallest granularity
-	uint32_t prescaler = 0;
+	uint32_t PSC = 0;
+	uint32_t ARR;
+	uint32_t CCR1;
 
 	// how many clock ticks until the desired period is reached? subtract 1 due to 0-indexing of CNT
-	auto_reload_register = CLOCK_FREQUENCY / frequency_hz - 1;
+	ARR = CLOCK_FREQUENCY / frequency_hz - 1;
 
-	capture_compare_register = (auto_reload_register + 1) * percent_duty / 100;
+	if (type == SQUARE)
+		CCR1 = (ARR + 1) * percent_duty / 100;
+	else {
+		n_steps = STEPS_PER_SECOND / frequency_hz;
+		CCR1_increment = ARR / n_steps;
+		voltage_increment = V_MAX / (n_steps - 1);
 
-	TIM2_start(prescaler, auto_reload_register, capture_compare_register);
+		// 0-indexed
+		current_step = 0;
+		CCR1 = CCR1_increment; // first CCR1 begins step 1
+	}
 
-	/// TODO: mode
+	switch (type) {
+	case SAWTOOTH:
+		callbacks.on_ccr1 = sawtooth_wave_on_ccr1;
+		callbacks.on_uif = sawtooth_wave_on_uif;
+	}
+	TIM2_start(PSC, ARR, CCR1);
 }
 
 //--------------------------------------------------
-// primary helpers
+// wave generation
 
 void sawtooth_wave_on_uif()
 {
 	dac_send(V_MIN);
+	current_step = 0;
+	TIM2_CCR1_reset();
 }
 
 void sawtooth_wave_on_ccr1()
 {
-
+	current_step += 1;
+	TIM2_ccr1_increment();
+	dac_send(current_step * voltage_increment);
 }
 
 void dac_send(float voltOut)
@@ -84,7 +115,40 @@ void dac_send(float voltOut)
 }
 
 //--------------------------------------------------
+// interrupt service routine
+void TIM2_IRQHandler()
+{
+	if (TIM2->SR & TIM_SR_UIF) {
+		callbacks.on_uif();
+
+		// SPI_send_data(0xFFF);
+
+		// always clear flag
+		TIM2->SR &= ~(TIM_SR_UIF);
+		return;
+	}
+
+	if (TIM2->SR & TIM_SR_CC1IF) {
+		callbacks.on_ccr1();
+
+		// clear flag
+		TIM2->SR &= ~(TIM_SR_CC1IF);
+		return;
+	}
+}
+
+//--------------------------------------------------
 // low-level helpers
+
+void TIM2_ccr1_increment()
+{
+	TIM2->CCR1 += CCR1_increment;
+}
+
+void TIM2_CCR1_reset()
+{
+	TIM2->CCR1 = CCR1_increment;
+}
 
 void SPI_send_data(uint16_t value)
 {
@@ -108,21 +172,21 @@ void SPI_send_data(uint16_t value)
 	GPIOB->BSRR = GPIO_BSRR_BR6;
 
 	// wait until transmit buffer is empty
-	while (!(SPI1->SR & SPI_SR_TXE))
+	while (!(SPI2->SR & SPI_SR_TXE))
 		;
 
-	SPI1->DR = command;
+	SPI2->DR = command;
 
 	// wait until the transmit buffer is empty.
 	// if we don't do this, we might check the BSY flag before
 	// any data actually entered SPI, which would be result in a
 	// premature end of transmission
-	while (!(SPI1->SR & SPI_SR_TXE))
+	while (!(SPI2->SR & SPI_SR_TXE))
 		;
 
 	// after the data has exited the buffer, check that SPI is done
 	// processing it.
-	while (SPI1->SR & SPI_SR_BSY)
+	while (SPI2->SR & SPI_SR_BSY)
 		;
 
 	// B6 high = CS high = end transmission
@@ -162,9 +226,6 @@ void TIM2_start(uint32_t prescaler, uint32_t auto_reload_register, uint32_t capt
 
 	// enable
 	TIM2->CR1 |= TIM_CR1_CEN_Msk;
-}
-
-void TIM2_ccr1_set(uint32_t ) {
 }
 
 void TIM2_init()
@@ -211,27 +272,6 @@ void TIM2_init()
 	// do not enable until PSC, ARR, CCR1 are set
 }
 
-void TIM2_IRQHandler()
-{
-	if (TIM2->SR & TIM_SR_UIF) {
-		callbacks.on_uif();
-
-		// SPI_send_data(0xFFF);
-
-		// always clear flag
-		TIM2->SR &= ~(TIM_SR_UIF);
-		return;
-	}
-
-	if (TIM2->SR & TIM_SR_CC1IF) {
-		callbacks.on_ccr1();
-
-		// clear flag
-		TIM2->SR &= ~(TIM_SR_CC1IF);
-		return;
-	}
-}
-
 // PB13 and PB15 alternative mode
 // PB13 = SCK
 // PB15 = MOSI = PICO
@@ -242,17 +282,17 @@ void SPI_init()
 	RCC->AHB2ENR |= RCC_AHB2ENR_GPIOAEN;
 	RCC->AHB2ENR |= RCC_AHB2ENR_GPIOBEN;
 
-	// SPI clock
-	RCC->APB2ENR |= RCC_APB2ENR_SPI1EN;
+	// SPI2 clock
+	RCC->APB1ENR1 |= RCC_APB1ENR1_SPI2EN;
 
+	// PB13 = SCK, PB15 = MOSI
 	GPIOB->MODER &= ~(GPIO_MODER_MODE13_Msk | GPIO_MODER_MODE15_Msk);
-	GPIOA->MODER |= 0b10 << GPIO_MODER_MODE13_Pos;
-	GPIOA->MODER |= 0b10 << GPIO_MODER_MODE15_Pos;
+	GPIOB->MODER |= (0b10 << GPIO_MODER_MODE13_Pos)
+	              | (0b10 << GPIO_MODER_MODE15_Pos);
 
-	// AF=5=SPI for PA5 and PA7
 	GPIOB->AFR[1] &= ~(GPIO_AFRH_AFSEL13_Msk | GPIO_AFRH_AFSEL15_Msk);
-	GPIOB->AFR[1] |= GPIO_AF5_SPI1 << GPIO_AFRH_AFSEL13_Pos;
-	GPIOB->AFR[1] |= GPIO_AF5_SPI1 << GPIO_AFRH_AFSEL15_Pos;
+	GPIOB->AFR[1] |= (GPIO_AF5_SPI2 << GPIO_AFRH_AFSEL13_Pos)
+	               | (GPIO_AF5_SPI2 << GPIO_AFRH_AFSEL15_Pos);
 
 	GPIOB->MODER &= ~(GPIO_MODER_MODE6_Msk);
 	GPIOB->MODER |= (0b01 << GPIO_MODER_MODE6_Pos);
@@ -277,36 +317,36 @@ void SPI_init()
 	GPIOB->BSRR = GPIO_BSRR_BS6;
 
 	// disable SPI while configuring
-	SPI1->CR1 &= ~SPI_CR1_SPE_Msk;
+	SPI2->CR1 &= ~SPI_CR1_SPE_Msk;
 
 	// ----
 	// CR1 config
-	SPI1->CR1 |= SPI_CR1_MSTR;
+	SPI2->CR1 |= SPI_CR1_MSTR;
 
 	// baud rate calculation
-	SPI1->CR1 &= ~(SPI_CR1_BR_Msk);
-	SPI1->CR1 |= 1 << SPI_CR1_BR_Pos;
+	SPI2->CR1 &= ~(SPI_CR1_BR_Msk);
+	SPI2->CR1 |= 1 << SPI_CR1_BR_Pos;
 
 	// CPOL = 0 = idle low
-	SPI1->CR1 &= ~(SPI_CR1_CPOL);
+	SPI2->CR1 &= ~(SPI_CR1_CPOL);
 
 	// CPHA = 0 = rising edge sample
-	SPI1->CR1 &= ~(SPI_CR1_CPHA);
+	SPI2->CR1 &= ~(SPI_CR1_CPHA);
 
 	// LSBFIRST = 0 => Most Significant Bit first
-	SPI1->CR1 &= ~(SPI_CR1_LSBFIRST);
+	SPI2->CR1 &= ~(SPI_CR1_LSBFIRST);
 
 	// SSM = 1 = NSS is managed by software through SSI instead of hardware
-	SPI1->CR1 |= SPI_CR1_SSM;
+	SPI2->CR1 |= SPI_CR1_SSM;
 
 	// SSI = 1 = internal NSS kept high in controller mode
-	SPI1->CR1 |= SPI_CR1_SSI;
+	SPI2->CR1 |= SPI_CR1_SSI;
 
 	// 16 bit frame
-	SPI1->CR2 &= ~SPI_CR2_DS_Msk;
-	SPI1->CR2 |= (0b1111 << SPI_CR2_DS_Pos);
+	SPI2->CR2 &= ~SPI_CR2_DS_Msk;
+	SPI2->CR2 |= (0b1111 << SPI_CR2_DS_Pos);
 
 	// -----------
 	// re-enable SPI
-	SPI1->CR1 |= SPI_CR1_SPE;
+	SPI2->CR1 |= SPI_CR1_SPE;
 }
