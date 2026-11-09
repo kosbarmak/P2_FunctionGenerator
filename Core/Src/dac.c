@@ -74,85 +74,6 @@ void dac_send(float voltOut)
 //--------------------------------------------------
 // low-level helpers
 
-// PA5 and PA7 alternative mode
-// PA5 = SCK
-// PA7 = MOSI = PICO
-// PB6 = CS
-void SPI_init()
-{
-	// GPIO clocks
-	RCC->AHB2ENR |= RCC_AHB2ENR_GPIOAEN;
-	RCC->AHB2ENR |= RCC_AHB2ENR_GPIOBEN;
-
-	// SPI clock
-	RCC->APB2ENR |= RCC_APB2ENR_SPI1EN;
-
-	GPIOA->MODER &= ~(GPIO_MODER_MODE5_Msk | GPIO_MODER_MODE7_Msk);
-	GPIOA->MODER |= 0b10 << GPIO_MODER_MODE5_Pos;
-	GPIOA->MODER |= 0b10 << GPIO_MODER_MODE7_Pos;
-
-	// AF=5=SPI for PA5 and PA7
-	GPIOA->AFR[0] &= ~(GPIO_AFRL_AFSEL5_Msk | GPIO_AFRL_AFSEL7_Msk);
-	GPIOA->AFR[0] |= GPIO_AF5_SPI1 << GPIO_AFRL_AFSEL5_Pos;
-	GPIOA->AFR[0] |= GPIO_AF5_SPI1 << GPIO_AFRL_AFSEL7_Pos;
-
-	GPIOB->MODER &= ~(GPIO_MODER_MODE6_Msk);
-	GPIOB->MODER |= (0b01 << GPIO_MODER_MODE6_Pos);
-
-	// Enable GPIOB clock (if not already enabled)
-	RCC->AHB2ENR |= RCC_AHB2ENR_GPIOBEN;
-
-	// PB6: General-purpose output (01)
-	GPIOB->MODER &= ~(GPIO_MODER_MODE6_Msk);
-	GPIOB->MODER |= (0b01 << GPIO_MODER_MODE6_Pos);
-
-	// PB6: Push-pull output (0)
-	GPIOB->OTYPER &= ~(1U << 6);
-
-	// PB6: No pull-up or pull-down (00)
-	GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPD6_Msk);
-
-	// PB6: Low-speed output (00)
-	GPIOB->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEED6_Msk); // ?
-
-	// Initialize chip select as high (idle)
-	GPIOB->BSRR = GPIO_BSRR_BS6;
-
-	// disable SPI while configuring
-	SPI1->CR1 &= ~SPI_CR1_SPE_Msk;
-
-	// ----
-	// CR1 config
-	SPI1->CR1 |= SPI_CR1_MSTR;
-
-	// baud rate calculation
-	SPI1->CR1 &= ~(SPI_CR1_BR_Msk);
-	SPI1->CR1 |= 1 << SPI_CR1_BR_Pos;
-
-	// CPOL = 0 = idle low
-	SPI1->CR1 &= ~(SPI_CR1_CPOL);
-
-	// CPHA = 0 = rising edge sample
-	SPI1->CR1 &= ~(SPI_CR1_CPHA);
-
-	// LSBFIRST = 0 => Most Significant Bit first
-	SPI1->CR1 &= ~(SPI_CR1_LSBFIRST);
-
-	// SSM = 1 = NSS is managed by software through SSI instead of hardware
-	SPI1->CR1 |= SPI_CR1_SSM;
-
-	// SSI = 1 = internal NSS kept high in controller mode
-	SPI1->CR1 |= SPI_CR1_SSI;
-
-	// 16 bit frame
-	SPI1->CR2 &= ~SPI_CR2_DS_Msk;
-	SPI1->CR2 |= (0b1111 << SPI_CR2_DS_Pos);
-
-	// -----------
-	// re-enable SPI
-	SPI1->CR1 |= SPI_CR1_SPE;
-}
-
 void SPI_send_data(uint16_t value)
 {
 	// header may be different depending on the target
@@ -294,4 +215,83 @@ void TIM2_IRQHandler()
 		TIM2->SR &= ~(TIM_SR_CC1IF);
 		return;
 	}
+}
+
+// PB13 and PB15 alternative mode
+// PB13 = SCK
+// PB15 = MOSI = PICO
+// PB6 = CS
+void SPI_init()
+{
+	// GPIO clocks
+	RCC->AHB2ENR |= RCC_AHB2ENR_GPIOAEN;
+	RCC->AHB2ENR |= RCC_AHB2ENR_GPIOBEN;
+
+	// SPI clock
+	RCC->APB2ENR |= RCC_APB2ENR_SPI1EN;
+
+	GPIOB->MODER &= ~(GPIO_MODER_MODE13_Msk | GPIO_MODER_MODE15_Msk);
+	GPIOA->MODER |= 0b10 << GPIO_MODER_MODE13_Pos;
+	GPIOA->MODER |= 0b10 << GPIO_MODER_MODE15_Pos;
+
+	// AF=5=SPI for PA5 and PA7
+	GPIOB->AFR[1] &= ~(GPIO_AFRH_AFSEL13_Msk | GPIO_AFRH_AFSEL15_Msk);
+	GPIOB->AFR[1] |= GPIO_AF5_SPI1 << GPIO_AFRH_AFSEL13_Pos;
+	GPIOB->AFR[1] |= GPIO_AF5_SPI1 << GPIO_AFRH_AFSEL15_Pos;
+
+	GPIOB->MODER &= ~(GPIO_MODER_MODE6_Msk);
+	GPIOB->MODER |= (0b01 << GPIO_MODER_MODE6_Pos);
+
+	// Enable GPIOB clock (if not already enabled)
+	RCC->AHB2ENR |= RCC_AHB2ENR_GPIOBEN;
+
+	// PB6: General-purpose output (01)
+	GPIOB->MODER &= ~(GPIO_MODER_MODE6_Msk);
+	GPIOB->MODER |= (0b01 << GPIO_MODER_MODE6_Pos);
+
+	// PB6: Push-pull output (0)
+	GPIOB->OTYPER &= ~(1U << 6);
+
+	// PB6: No pull-up or pull-down (00)
+	GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPD6_Msk);
+
+	// PB6: Low-speed output (00)
+	GPIOB->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEED6_Msk); // ?
+
+	// Initialize chip select as high (idle)
+	GPIOB->BSRR = GPIO_BSRR_BS6;
+
+	// disable SPI while configuring
+	SPI1->CR1 &= ~SPI_CR1_SPE_Msk;
+
+	// ----
+	// CR1 config
+	SPI1->CR1 |= SPI_CR1_MSTR;
+
+	// baud rate calculation
+	SPI1->CR1 &= ~(SPI_CR1_BR_Msk);
+	SPI1->CR1 |= 1 << SPI_CR1_BR_Pos;
+
+	// CPOL = 0 = idle low
+	SPI1->CR1 &= ~(SPI_CR1_CPOL);
+
+	// CPHA = 0 = rising edge sample
+	SPI1->CR1 &= ~(SPI_CR1_CPHA);
+
+	// LSBFIRST = 0 => Most Significant Bit first
+	SPI1->CR1 &= ~(SPI_CR1_LSBFIRST);
+
+	// SSM = 1 = NSS is managed by software through SSI instead of hardware
+	SPI1->CR1 |= SPI_CR1_SSM;
+
+	// SSI = 1 = internal NSS kept high in controller mode
+	SPI1->CR1 |= SPI_CR1_SSI;
+
+	// 16 bit frame
+	SPI1->CR2 &= ~SPI_CR2_DS_Msk;
+	SPI1->CR2 |= (0b1111 << SPI_CR2_DS_Pos);
+
+	// -----------
+	// re-enable SPI
+	SPI1->CR1 |= SPI_CR1_SPE;
 }
