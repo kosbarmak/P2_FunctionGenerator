@@ -1,0 +1,2 @@
+- Port over the code and wiring for the keypad
+- add helper functions for sending waves to the SPI
