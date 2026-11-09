@@ -488,7 +488,7 @@
     "pinned_symbol_libs": []
   },
   "meta": {
-    "filename": "P1_Lock.kicad_pro",
+    "filename": "P2_wavegen.kicad_pro",
     "version": 3
   },
   "net_settings": {
@@ -656,18 +656,18 @@
     "subpart_id_separator": 0,
     "top_level_sheets": [
       {
-        "filename": "P1_Lock.kicad_sch",
-        "name": "Root",
+        "filename": "P2_wavegen.kicad_sch",
+        "name": "P2_wavegen",
         "uuid": "5e2df9ca-03bb-49be-9c86-c051a8edf5f2"
       }
     ],
-    "used_designators": "SW1-2,DS1,U1-3,R1,J1,#PWR1-4,D1",
+    "used_designators": "DS1,U1-3,J1,R1,D1,RV1",
     "variants": []
   },
   "sheets": [
     [
       "5e2df9ca-03bb-49be-9c86-c051a8edf5f2",
-      "Root"
+      "P2_wavegen"
     ]
   ],
   "text_variables": {},

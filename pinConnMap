@@ -1,0 +1,24 @@
+Keypad:
+PA5     ->  ROW1
+PA6     ->  ROW2
+PA7     ->  ROW3
+PA8     ->  ROW4
+PC10    ->  COL1
+PC11    ->  COL2
+PC12    ->  COL3
+
+DAC:
+3V      ->  V_DD
+PB6     ->  CS
+PB13    ->  SCK
+PB15    ->  SDI/MOSI
+GND     ->  LDAC
+3V      ->  V_REFA
+GND     ->  AV_SS
+AD2_1+  ->  V_OUTA
+
+AD2/Osciloscope:
+V_OUTA  ->  AD2_1+
+GND     ->  AD2_1-
+
+
