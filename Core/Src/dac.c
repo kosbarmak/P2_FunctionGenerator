@@ -17,12 +17,19 @@ struct interrupt_handler_functions {
 static struct interrupt_handler_functions callbacks;
 //--------------------------------------------------
 // wave generation globals
-uint32_t auto_reload_register;
-uint32_t capture_compare_register;
+typedef enum WaveType { SQUARE, SAWTOOTH, TRIANGLE, SINE } WaveType;
+
+static int n_steps;
+static int CCR1_increment;
+static int voltage_increment;
+static int current_step;
 
 //--------------------------------------------------
 // other globals
 static const int CLOCK_FREQUENCY = 4000000;
+
+// from the example: 1 step per 1ms = 1/0.001s = 1000/s = 1000 Hz
+static const int STEPS_PER_SECOND = 1000;
 
 static const float DC_BIAS = 1.5f;
 static const float V_PEAK_TO_PEAK = 3.0f;
@@ -39,42 +46,65 @@ uint16_t SPI_volt_convert(float voltOut);
 void dac_send(float voltOut);
 void SPI_init();
 void TIM2_init();
+void TIM2_ccr1_increment();
+void TIM2_CCR1_reset();
+void sawtooth_wave_on_uif();
+void sawtooth_wave_on_ccr1();
 
 //--------------------------------------------------
 // interface
 
-void dac_init() 
+void dac_init()
 {
 	SPI_init();
 	TIM2_init();
 }
 
-void dac_start(uint16_t frequency_hz, uint8_t percent_duty)
+void dac_start(WaveType type, uint16_t frequency_hz, uint8_t percent_duty)
 {
 	// keep the update frequency at its smallest granularity
-	uint32_t prescaler = 0;
+	uint32_t PSC = 0;
+	uint32_t ARR;
+	uint32_t CCR1;
 
 	// how many clock ticks until the desired period is reached? subtract 1 due to 0-indexing of CNT
-	auto_reload_register = CLOCK_FREQUENCY / frequency_hz - 1;
+	ARR = CLOCK_FREQUENCY / frequency_hz - 1;
 
-	capture_compare_register = (auto_reload_register + 1) * percent_duty / 100;
+	if (type == SQUARE)
+		CCR1 = (ARR + 1) * percent_duty / 100;
+	else {
+		n_steps = STEPS_PER_SECOND / frequency_hz;
+		CCR1_increment = ARR / n_steps;
+		voltage_increment = V_MAX / (n_steps - 1);
 
-	TIM2_start(prescaler, auto_reload_register, capture_compare_register);
+		// 0-indexed
+		current_step = 0;
+		CCR1 = CCR1_increment; // first CCR1 begins step 1
+	}
 
-	/// TODO: mode
+	switch (type) {
+	case SAWTOOTH:
+		callbacks.on_ccr1 = sawtooth_wave_on_ccr1;
+		callbacks.on_uif = sawtooth_wave_on_uif;
+	}
+	TIM2_start(PSC, ARR, CCR1);
 }
 
 //--------------------------------------------------
-// primary helpers
+// wave generation
 
 void sawtooth_wave_on_uif()
 {
 	dac_send(V_MIN);
+	current_step = 0;
+	TIM2_CCR1_reset();
 }
 
 void sawtooth_wave_on_ccr1()
 {
-
+	current_step += 1;
+	TIM2_ccr1_increment();
+	dac_send(current_step * voltage_increment);
 }
 
 void dac_send(float voltOut)
@@ -84,12 +114,46 @@ void dac_send(float voltOut)
 }
 
 //--------------------------------------------------
+// interrupt service routine
+void TIM2_IRQHandler()
+{
+	if (TIM2->SR & TIM_SR_UIF) {
+		callbacks.on_uif();
+
+		// SPI_send_data(0xFFF);
+
+		// always clear flag
+		TIM2->SR &= ~(TIM_SR_UIF);
+		return;
+	}
+
+	if (TIM2->SR & TIM_SR_CC1IF) {
+		callbacks.on_ccr1();
+
+		// clear flag
+		TIM2->SR &= ~(TIM_SR_CC1IF);
+		return;
+	}
+}
+
+//--------------------------------------------------
 // low-level helpers
 
 // PA5 and PA7 alternative mode
 // PA5 = SCK
 // PA7 = MOSI = PICO
 // PB6 = CS
+
+void TIM2_ccr1_increment()
+{
+	TIM2->CCR1 += CCR1_increment;
+}
+
+void TIM2_CCR1_reset()
+{
+	TIM2->CCR1 = CCR1_increment;
+}
+
 void SPI_init()
 {
 	// GPIO clocks
@@ -243,9 +307,6 @@ void TIM2_start(uint32_t prescaler, uint32_t auto_reload_register, uint32_t capt
 	TIM2->CR1 |= TIM_CR1_CEN_Msk;
 }
 
-void TIM2_ccr1_set(uint32_t ) {
-}
-
 void TIM2_init()
 {
 	// APB1 = advanced peripheral bus
@@ -288,25 +349,4 @@ void TIM2_init()
 	// CEN - counter enable
 
 	// do not enable until PSC, ARR, CCR1 are set
-}
-
-void TIM2_IRQHandler()
-{
-	if (TIM2->SR & TIM_SR_UIF) {
-		callbacks.on_uif();
-
-		// SPI_send_data(0xFFF);
-
-		// always clear flag
-		TIM2->SR &= ~(TIM_SR_UIF);
-		return;
-	}
-
-	if (TIM2->SR & TIM_SR_CC1IF) {
-		callbacks.on_ccr1();
-
-		// clear flag
-		TIM2->SR &= ~(TIM_SR_CC1IF);
-		return;
-	}
 }
