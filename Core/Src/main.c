@@ -33,9 +33,21 @@
 #include "stm32l4xx_hal_gpio_ex.h"
 #include <stddef.h>
 #include <stdint.h>
+#include "init.h"
+#include "keypad.h"
+#include "dac.h"
+
+// Function Prototypes
+int main(void);
+void handleInput(int i);
+
+void handleInput(int i) {
+    
+
+}
 
 
-int main()
+int main(void)
 {
 	// HAL_Init();
 	dac_init();
