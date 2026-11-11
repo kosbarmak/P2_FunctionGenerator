@@ -105,8 +105,6 @@ int main(void)
     
         handleInput(keyInput);
     }
- 
-
 
 	while (true) {
 		// SPI_send_data(0b111111111111);
