@@ -51,7 +51,7 @@ int main(void)
 {
 	// HAL_Init();
 	dac_init();
-	dac_start(SAWTOOTH, 100, 50);
+	dac_start(SAWTOOTH, 200, 50);
 
 	while (true) {
 		// SPI_send_data(0b111111111111);

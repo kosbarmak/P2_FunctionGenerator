@@ -22,7 +22,7 @@ static struct interrupt_handler_functions callbacks;
 
 static int n_steps;
 static int CCR1_increment;
-static int voltage_increment;
+static float voltage_increment;
 static int current_step;
 
 //--------------------------------------------------
@@ -30,7 +30,7 @@ static int current_step;
 static const int CLOCK_FREQUENCY = 4000000;
 
 // from the example: 1 step per 1ms = 1/0.001s = 1000/s = 1000 Hz
-static const int STEPS_PER_SECOND = 1000;
+static const int STEPS_PER_SECOND = 10000;
 
 static const float DC_BIAS = 1.5f;
 static const float V_PEAK_TO_PEAK = 3.0f;
@@ -41,6 +41,8 @@ static const float V_MAX = DC_BIAS + V_PEAK_TO_PEAK / 2;
 //--------------------------------------------------
 
 // forward-declarations
+void TIM2_pause();
+void TIM2_restart();
 void TIM2_start(uint32_t prescaler, uint32_t auto_reload_register, uint32_t capture_compare_register);
 void SPI_send_data(uint16_t value);
 uint16_t SPI_volt_convert(float voltOut);
@@ -90,9 +92,11 @@ void dac_start(WaveType type, uint16_t frequency_hz, uint8_t percent_duty)
 	case SAWTOOTH:
 		callbacks.on_ccr1 = sawtooth_wave_on_ccr1;
 		callbacks.on_uif = sawtooth_wave_on_uif;
+		break;
 	case SQUARE:
 		callbacks.on_ccr1 = square_wave_on_ccr1;
 		callbacks.on_uif = square_wave_on_uif;
+		break;
 	}
 
 	TIM2_start(PSC, ARR, CCR1);
@@ -103,9 +107,9 @@ void dac_start(WaveType type, uint16_t frequency_hz, uint8_t percent_duty)
 
 void sawtooth_wave_on_uif()
 {
-	dac_send(V_MIN);
 	current_step = 0;
 	TIM2_CCR1_reset();
+	dac_send(V_MIN);
 }
 
 void sawtooth_wave_on_ccr1()
@@ -136,12 +140,13 @@ void dac_send(float voltOut)
 void TIM2_IRQHandler()
 {
 	if (TIM2->SR & TIM_SR_UIF) {
-		callbacks.on_uif();
+		TIM2_pause();
 
-		// SPI_send_data(0xFFF);
+		callbacks.on_uif();
 
 		// always clear flag
 		TIM2->SR &= ~(TIM_SR_UIF);
+		TIM2_restart();
 		return;
 	}
 
@@ -156,6 +161,13 @@ void TIM2_IRQHandler()
 
 //--------------------------------------------------
 // low-level helpers
+void TIM2_pause() {
+	TIM2->CR1 &= ~TIM_CR1_CEN;
+}
+
+void TIM2_restart() {
+	TIM2->CR1 |= TIM_CR1_CEN;
+}
 
 void TIM2_ccr1_increment()
 {
@@ -165,6 +177,9 @@ void TIM2_ccr1_increment()
 void TIM2_CCR1_reset()
 {
 	TIM2->CCR1 = CCR1_increment;
+
+	// reset the flag
+	TIM2->SR &= ~TIM_SR_CC1IF;
 }
 
 void SPI_send_data(uint16_t value)
