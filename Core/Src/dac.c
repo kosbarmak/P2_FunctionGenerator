@@ -51,6 +51,8 @@ void TIM2_ccr1_increment();
 void TIM2_CCR1_reset();
 void sawtooth_wave_on_uif();
 void sawtooth_wave_on_ccr1();
+void square_wave_on_uif();
+void square_wave_on_ccr1();
 
 //--------------------------------------------------
 // interface
@@ -71,9 +73,10 @@ void dac_start(WaveType type, uint16_t frequency_hz, uint8_t percent_duty)
 	// how many clock ticks until the desired period is reached? subtract 1 due to 0-indexing of CNT
 	ARR = CLOCK_FREQUENCY / frequency_hz - 1;
 
-	if (type == SQUARE)
+	if (type == SQUARE) {
 		CCR1 = (ARR + 1) * percent_duty / 100;
-	else {
+		dac_send(V_MAX);
+	} else {
 		n_steps = STEPS_PER_SECOND / frequency_hz;
 		CCR1_increment = ARR / n_steps;
 		voltage_increment = V_MAX / (n_steps - 1);
@@ -87,7 +90,11 @@ void dac_start(WaveType type, uint16_t frequency_hz, uint8_t percent_duty)
 	case SAWTOOTH:
 		callbacks.on_ccr1 = sawtooth_wave_on_ccr1;
 		callbacks.on_uif = sawtooth_wave_on_uif;
+	case SQUARE:
+		callbacks.on_ccr1 = square_wave_on_ccr1;
+		callbacks.on_uif = square_wave_on_uif;
 	}
+
 	TIM2_start(PSC, ARR, CCR1);
 }
 
@@ -106,6 +113,16 @@ void sawtooth_wave_on_ccr1()
 	current_step += 1;
 	TIM2_ccr1_increment();
 	dac_send(current_step * voltage_increment);
+}
+
+void square_wave_on_uif()
+{
+	dac_send(V_MAX);
+}
+
+void square_wave_on_ccr1()
+{
+	dac_send(V_MIN);
 }
 
 void dac_send(float voltOut)
@@ -287,12 +304,10 @@ void SPI_init()
 
 	// PB13 = SCK, PB15 = MOSI
 	GPIOB->MODER &= ~(GPIO_MODER_MODE13_Msk | GPIO_MODER_MODE15_Msk);
-	GPIOB->MODER |= (0b10 << GPIO_MODER_MODE13_Pos)
-	              | (0b10 << GPIO_MODER_MODE15_Pos);
+	GPIOB->MODER |= (0b10 << GPIO_MODER_MODE13_Pos) | (0b10 << GPIO_MODER_MODE15_Pos);
 
 	GPIOB->AFR[1] &= ~(GPIO_AFRH_AFSEL13_Msk | GPIO_AFRH_AFSEL15_Msk);
-	GPIOB->AFR[1] |= (GPIO_AF5_SPI2 << GPIO_AFRH_AFSEL13_Pos)
-	               | (GPIO_AF5_SPI2 << GPIO_AFRH_AFSEL15_Pos);
+	GPIOB->AFR[1] |= (GPIO_AF5_SPI2 << GPIO_AFRH_AFSEL13_Pos) | (GPIO_AF5_SPI2 << GPIO_AFRH_AFSEL15_Pos);
 
 	GPIOB->MODER &= ~(GPIO_MODER_MODE6_Msk);
 	GPIOB->MODER |= (0b01 << GPIO_MODER_MODE6_Pos);

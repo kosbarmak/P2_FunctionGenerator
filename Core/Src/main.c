@@ -24,6 +24,8 @@
        
  */
 
+#include "dac.h"
+
 #include "stdbool.h"
 #include "stm32l476xx.h"
 #include "stm32l4xx_hal.h"
@@ -35,7 +37,9 @@
 
 int main()
 {
-	HAL_Init();
+	// HAL_Init();
+	dac_init();
+	dac_start(SAWTOOTH, 100, 50);
 
 	while (true) {
 		// SPI_send_data(0b111111111111);
