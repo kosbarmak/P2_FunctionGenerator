@@ -49,8 +49,10 @@ int currentFrequency = 100;
 void handleInput(int i) {
 
     //Set frequency (1-5)
-    if (i >= 1 && i <= 5) 
-        dac_start(currentMode, i * 100, dutyPercent);
+    if (i >= 1 && i <= 5) {
+        currentFrequency = i * 100;
+        dac_start(currentMode, currentFrequency, dutyPercent);
+    }
 
     //Change mode (6-9)
     //Note: what if we did range 6-9 then convert to enum?
