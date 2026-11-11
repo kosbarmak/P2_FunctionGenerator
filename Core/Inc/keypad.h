@@ -11,6 +11,10 @@
 #define PA_ROW_START 5
 #define PC_COLUMN_START 10
 
+#define starValue 10
+#define zeroValue 0
+#define poundValue 15
+
 #define INVALID_VALUE -1
 
 int get_pressed_key();

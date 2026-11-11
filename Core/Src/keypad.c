@@ -51,13 +51,13 @@ int get_key_value(uint8_t row, uint8_t col)
 
 	// treat the last row with special hardcoded values
 	if (col == 0)
-		return 10;
+		return starValue;
 
 	if (col == 1)
-		return 0;
+		return zeroValue;
 
 	if (col == 2)
-		return 15;
+		return poundValue;
 
 	return INVALID_VALUE;
 }

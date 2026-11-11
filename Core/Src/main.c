@@ -41,9 +41,49 @@
 int main(void);
 void handleInput(int i);
 
-void handleInput(int i) {
-    
+// Global Variables
+int dutyPercent = 50;
+WaveType currentMode = SAWTOOTH;
+int currentFrequency = 100;
 
+void handleInput(int i) {
+
+    //Set frequency (1-5)
+    if (i >= 1 && i <= 5) 
+        dac_start(currentMode, i * 100, dutyPercent);
+
+    //Change mode (6-9)
+    //Note: what if we did range 6-9 then convert to enum?
+    if (i == 6)
+        dac_start(SINE, currentFrequency, dutyPercent);
+
+    if (i == 7)
+        dac_start(TRIANGLE, currentFrequency, dutyPercent);
+
+    if (i == 8) 
+        dac_start(SAWTOOTH, currentFrequency, dutyPercent);
+
+    if (i == 9)
+        dac_start(SQUARE, currentFrequency, dutyPercent);
+
+    //Special characters
+    if (currentMode != SQUARE)
+        return;
+
+    if(i == zeroValue) {
+        dutyPercent = 50;
+        dac_start(currentMode, currentFrequency, dutyPercent);
+    }
+    
+    if (i == starValue && dutyPercent > 10) {
+        dutyPercent -= 10;
+        dac_start(currentMode, currentFrequency, dutyPercent);
+    }
+
+    if (i == poundValue && dutyPercent < 90) {
+        dutyPercent += 10; 
+        dac_start(currentMode, currentFrequency, dutyPercent);
+    }
 }
 
 
@@ -51,7 +91,22 @@ int main(void)
 {
 	// HAL_Init();
 	dac_init();
-	dac_start(SAWTOOTH, 100, 50);
+	dac_start(currentMode, currentFrequency, dutyPercent);
+    
+    int keyInput = 0;
+   	while (1) {
+		keyInput = get_pressed_key();
+		
+        while (keyInput == INVALID_VALUE) {
+			keyInput = get_pressed_key();
+			HAL_Delay(25);
+			continue;
+		}
+    
+        handleInput(keyInput);
+    }
+ 
+
 
 	while (true) {
 		// SPI_send_data(0b111111111111);
