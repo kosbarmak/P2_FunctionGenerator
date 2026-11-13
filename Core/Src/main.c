@@ -92,7 +92,8 @@ int main(void)
 {
 	HAL_Init();
 	dac_init();
-	dac_start(currentMode, currentFrequency, dutyPercent);
+	// dac_start(currentMode, currentFrequency, dutyPercent);
+	dac_start(TRIANGLE, 100, 50);
 
 	int keyInput = 0;
 	while (1) {

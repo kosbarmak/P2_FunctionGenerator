@@ -20,7 +20,7 @@ static struct interrupt_handler_functions callbacks;
 //--------------------------------------------------
 // wave generation globals
 
-static int n_steps;
+static int n_steps = 10;
 static int CCR1_increment;
 static float voltage_increment;
 static int current_step;
@@ -30,7 +30,7 @@ static int current_step;
 static const int CLOCK_FREQUENCY = 4000000;
 
 // from the example: 1 step per 1ms = 1/0.001s = 1000/s = 1000 Hz
-static const int STEPS_PER_SECOND = 10000;
+static const int STEPS_PER_SECOND = 1000;
 
 static const float DC_BIAS = 1.5f;
 static const float V_PEAK_TO_PEAK = 3.0f;
@@ -55,6 +55,8 @@ void sawtooth_wave_on_uif();
 void sawtooth_wave_on_ccr1();
 void square_wave_on_uif();
 void square_wave_on_ccr1();
+void triangle_wave_on_uif();
+void triangle_wave_on_ccr1();
 
 //--------------------------------------------------
 // interface
@@ -97,6 +99,9 @@ void dac_start(WaveType type, uint16_t frequency_hz, uint8_t percent_duty)
 		callbacks.on_ccr1 = square_wave_on_ccr1;
 		callbacks.on_uif = square_wave_on_uif;
 		break;
+	case TRIANGLE:
+		callbacks.on_ccr1 = triangle_wave_on_ccr1;
+		callbacks.on_uif = triangle_wave_on_uif;
 	}
 
 	TIM2_start(PSC, ARR, CCR1);
@@ -127,6 +132,39 @@ void square_wave_on_uif()
 void square_wave_on_ccr1()
 {
 	dac_send(V_MIN);
+}
+
+void triangle_wave_on_uif() 
+{
+	current_step = 0;
+	TIM2_CCR1_reset();
+	dac_send(V_MIN);
+}
+
+void triangle_wave_on_ccr1() 
+{
+	int peak = n_steps / 2;
+	static int step = 1;
+
+	if (current_step == 0)
+		step = 1;
+	else if (current_step == peak) {
+		step = -1;
+	}
+
+	current_step += step;
+
+	TIM2_ccr1_increment();
+
+	// double the step size so the same amplitude is reached in half the steps
+	dac_send(current_step * 2 * voltage_increment);
+}
+
+void sine_wave_on_uif() {
+}
+
+void sine_wave_on_ccr1() {
+	
 }
 
 void dac_send(float voltOut)
