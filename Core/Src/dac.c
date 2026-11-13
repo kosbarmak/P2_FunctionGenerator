@@ -1,5 +1,7 @@
 #include "dac.h"
 
+#include <math.h>
+
 #include "stdbool.h"
 #include "stm32l476xx.h"
 #include "stm32l4xx_hal.h"
@@ -30,13 +32,21 @@ static int current_step;
 static const int CLOCK_FREQUENCY = 4000000;
 
 // from the example: 1 step per 1ms = 1/0.001s = 1000/s = 1000 Hz
-static const int STEPS_PER_SECOND = 1000;
+enum {
+	STEPS_PER_SECOND = 5000,
+	MAX_HX = 500,
+	MAX_STEPS_PER_PERIOD = STEPS_PER_SECOND / MAX_HX
+};
 
 static const float DC_BIAS = 1.5f;
 static const float V_PEAK_TO_PEAK = 3.0f;
 
 static const float V_MIN = DC_BIAS - V_PEAK_TO_PEAK / 2;
 static const float V_MAX = DC_BIAS + V_PEAK_TO_PEAK / 2;
+
+//--------------------------------------------------
+// Sine lookup table
+float SINES[MAX_STEPS_PER_PERIOD];
 
 //--------------------------------------------------
 
@@ -58,6 +68,10 @@ void square_wave_on_ccr1();
 void triangle_wave_on_uif();
 void triangle_wave_on_ccr1();
 
+void sine_wave_populate();
+void sine_wave_on_ccr1();
+void sine_wave_on_uif();
+
 //--------------------------------------------------
 // interface
 
@@ -65,6 +79,7 @@ void dac_init()
 {
 	SPI_init();
 	TIM2_init();
+	sine_wave_populate();
 }
 
 void dac_start(WaveType type, uint16_t frequency_hz, uint8_t percent_duty)
@@ -102,6 +117,9 @@ void dac_start(WaveType type, uint16_t frequency_hz, uint8_t percent_duty)
 	case TRIANGLE:
 		callbacks.on_ccr1 = triangle_wave_on_ccr1;
 		callbacks.on_uif = triangle_wave_on_uif;
+	case SINE:
+		callbacks.on_ccr1 = sine_wave_on_ccr1;
+		callbacks.on_uif = sine_wave_on_uif;
 	}
 
 	TIM2_start(PSC, ARR, CCR1);
@@ -134,14 +152,14 @@ void square_wave_on_ccr1()
 	dac_send(V_MIN);
 }
 
-void triangle_wave_on_uif() 
+void triangle_wave_on_uif()
 {
 	current_step = 0;
 	TIM2_CCR1_reset();
 	dac_send(V_MIN);
 }
 
-void triangle_wave_on_ccr1() 
+void triangle_wave_on_ccr1()
 {
 	int peak = n_steps / 2;
 	static int step = 1;
@@ -160,11 +178,34 @@ void triangle_wave_on_ccr1()
 	dac_send(current_step * 2 * voltage_increment);
 }
 
-void sine_wave_on_uif() {
+void sine_wave_populate()
+{
+	static const float dx = 2 * M_PI / MAX_STEPS_PER_PERIOD;
+
+	for (size_t i = 0; i < MAX_STEPS_PER_PERIOD; i++) {
+		SINES[i] = sinf(dx);
+	}
 }
 
-void sine_wave_on_ccr1() {
+void sine_wave_on_uif()
+{
+	current_step = 0;
+	TIM2_CCR1_reset();
+	dac_send(V_MIN);
+}
+
+void sine_wave_on_ccr1()
+{
+	current_step += 1;
+
+	// modulate fineness
+	int multiplier = MAX_STEPS_PER_PERIOD / n_steps;
+
+	float sine = SINES[current_step * multiplier];
+	float vout = V_MAX * sine;
 	
+	TIM2_ccr1_increment();
+	dac_send(vout);
 }
 
 void dac_send(float voltOut)
@@ -199,11 +240,13 @@ void TIM2_IRQHandler()
 
 //--------------------------------------------------
 // low-level helpers
-void TIM2_pause() {
+void TIM2_pause()
+{
 	TIM2->CR1 &= ~TIM_CR1_CEN;
 }
 
-void TIM2_restart() {
+void TIM2_restart()
+{
 	TIM2->CR1 |= TIM_CR1_CEN;
 }
 
