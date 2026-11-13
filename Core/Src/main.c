@@ -70,17 +70,25 @@ void handleInput(int i)
 
 	//Change mode (6-9)
 	//Note: what if we did range 6-9 then convert to enum?
-	if (i == 6)
-		dac_start(SINE, currentFrequency, dutyPercent);
+	if (i == 6) {
+		currentMode = SINE;
+        dacUpdate();
+    }
 
-	if (i == 7)
-		dac_start(TRIANGLE, currentFrequency, dutyPercent);
+	if (i == 7) {
+		currentMode = TRIANGLE;
+        dacUpdate();
+    }
 
-	if (i == 8)
-		dac_start(SAWTOOTH, currentFrequency, dutyPercent);
+	if (i == 8) {
+		currentMode = SAWTOOTH;
+        dacUpdate();
+    }
 
-	if (i == 9)
-		dac_start(SQUARE, currentFrequency, dutyPercent);
+	if (i == 9) {
+		currentMode = SQUARE;
+        dacUpdate();
+    }
 
 	//Special characters
 	if (currentMode != SQUARE)
@@ -94,12 +102,14 @@ void handleInput(int i)
 	if (i == starValue && dutyPercent > 10) {
 		dutyPercent -= 10;
 		dac_start(currentMode, currentFrequency, dutyPercent);
-	}
+        HAL_Delay(500);
+    }
 
 	if (i == poundValue && dutyPercent < 90) {
 		dutyPercent += 10;
 		dac_start(currentMode, currentFrequency, dutyPercent);
-	}
+	    HAL_Delay(500);
+    }
 }
 
 int main(void)
