@@ -1,27 +1,15 @@
 /* CPE 3160
  * John Oliver
  *
- * A5 - SPI Digital Analog Converter
+ * P2 - Function Generator
  * Chris Amey and Alan Kusparmakov
- *
- * Analog Discovery Reading:
- * https://drive.google.com/file/d/1ridWuwsIxUjhIY48B9w1fNhTV8Lpmowz/view?usp=sharing
 
- * SPI data transmission example:
- * https://drive.google.com/file/d/1ScAAHVJ-xHwXpT-e0M0DIUzHLanU-KGV/view?usp=sharing
- *
- * The header 0x3 contains dac information.
- * Then there is this message 0b111000111000. No meaning.
- *
- *
- * We then sent over the codes corresponding to 1 and 2V
- * 25% duty cycle between these values:
- * https://drive.google.com/file/d/1OmJZAfnXotZHQ4mua-e7QsWWCk10DQcZ/view?usp=sharing
+SocioTechnical Question: A DAC specifically uses high-purity silicon, which is sourced from countries like Chile and China, DRC.
+This material has similar social and environmental risks due to being mined from its raw form and passed through a long supply chain.
+There is not a well known alternative to this material. There is some research on organic superconductors, but it is not up to par at the moment. 
 
-
- And of course the video!!!!!!!1
- https://drive.google.com/file/d/1OmJZAfnXotZHQ4mua-e7QsWWCk10DQcZ/view?usp=sharing
-       
+VIDEO ALERT!!!!!!
+ https://drive.google.com/file/d/1fmjLzBhLX7sZHM6lUif-q09vI_BCTsPz/view?usp=sharing 
  */
 
 #include "dac.h"
