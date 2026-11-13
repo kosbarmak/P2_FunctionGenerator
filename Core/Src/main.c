@@ -46,6 +46,19 @@ int dutyPercent = 50;
 WaveType currentMode = SAWTOOTH;
 int currentFrequency = 100;
 
+void dacUpdate() {
+    dac_start(currentMode, currentFrequency, dutyPercent);
+}
+
+
+void changeToSawtooth() {
+    dutyPercent = 50;
+    currentMode = SAWTOOTH;
+    currentFrequency = 100;
+
+    dacUpdate();   
+}
+
 void handleInput(int i)
 {
 	//Set frequency (1-5)
@@ -92,9 +105,11 @@ int main(void)
 {
 	HAL_Init();
 	dac_init();
+    gpio_init();
 	dac_start(currentMode, currentFrequency, dutyPercent);
 
 	int keyInput = 0;
+    HAL_Delay(1000);
 	while (1) {
 		keyInput = get_pressed_key();
 
@@ -104,7 +119,7 @@ int main(void)
 			continue;
 		}
 
-		handleInput(keyInput);
+        handleInput(keyInput);
 	}
 
 	while (true) {
