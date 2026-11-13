@@ -33,9 +33,9 @@ static const int CLOCK_FREQUENCY = 4000000;
 
 // from the example: 1 step per 1ms = 1/0.001s = 1000/s = 1000 Hz
 enum {
-	STEPS_PER_SECOND = 5000,
-	MAX_HX = 500,
-	MAX_STEPS_PER_PERIOD = STEPS_PER_SECOND / MAX_HX
+	STEPS_PER_SECOND = 8000,
+	MIN_HZ = 100,
+	MAX_STEPS_PER_PERIOD = STEPS_PER_SECOND / MIN_HZ
 };
 
 static const float DC_BIAS = 1.5f;
@@ -97,7 +97,7 @@ void dac_start(WaveType type, uint16_t frequency_hz, uint8_t percent_duty)
 		dac_send(V_MAX);
 	} else {
 		n_steps = STEPS_PER_SECOND / frequency_hz;
-		CCR1_increment = ARR / n_steps;
+		CCR1_increment = (ARR+1) / n_steps;
 		voltage_increment = V_MAX / (n_steps - 1);
 
 		// 0-indexed
@@ -117,9 +117,11 @@ void dac_start(WaveType type, uint16_t frequency_hz, uint8_t percent_duty)
 	case TRIANGLE:
 		callbacks.on_ccr1 = triangle_wave_on_ccr1;
 		callbacks.on_uif = triangle_wave_on_uif;
+		break;
 	case SINE:
 		callbacks.on_ccr1 = sine_wave_on_ccr1;
 		callbacks.on_uif = sine_wave_on_uif;
+		break;
 	}
 
 	TIM2_start(PSC, ARR, CCR1);
@@ -183,15 +185,27 @@ void sine_wave_populate()
 	static const float dx = 2 * M_PI / MAX_STEPS_PER_PERIOD;
 
 	for (size_t i = 0; i < MAX_STEPS_PER_PERIOD; i++) {
-		SINES[i] = sinf(dx);
+		SINES[i] = sinf(i * dx);
 	}
 }
 
 void sine_wave_on_uif()
 {
-	current_step = 0;
 	TIM2_CCR1_reset();
-	dac_send(V_MIN);
+	current_step = n_steps;
+
+	// place the last sine value since ccr1 is skipped at the end
+	// modulate fineness
+	// int multiplier = MAX_STEPS_PER_PERIOD / n_steps;
+	//
+	// float sine = SINES[current_step * multiplier];
+	// float vout = (V_MAX + V_MIN) / 2 + (V_MAX / 2) * sine;
+	//
+	// dac_send(vout);
+
+	dac_send((V_MAX + V_MIN) / 2);
+
+	current_step = 0;
 }
 
 void sine_wave_on_ccr1()
@@ -202,7 +216,7 @@ void sine_wave_on_ccr1()
 	int multiplier = MAX_STEPS_PER_PERIOD / n_steps;
 
 	float sine = SINES[current_step * multiplier];
-	float vout = V_MAX * sine;
+	float vout = (V_MAX + V_MIN) / 2 + (V_MAX / 2) * sine;
 	
 	TIM2_ccr1_increment();
 	dac_send(vout);
@@ -230,7 +244,9 @@ void TIM2_IRQHandler()
 	}
 
 	if (TIM2->SR & TIM_SR_CC1IF) {
+		TIM2_pause();
 		callbacks.on_ccr1();
+		TIM2_restart();
 
 		// clear flag
 		TIM2->SR &= ~(TIM_SR_CC1IF);
