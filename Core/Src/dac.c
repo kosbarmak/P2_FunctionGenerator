@@ -30,7 +30,7 @@ static int current_step;
 static const int CLOCK_FREQUENCY = 4000000;
 
 // from the example: 1 step per 1ms = 1/0.001s = 1000/s = 1000 Hz
-static const int STEPS_PER_SECOND = 1000;
+static const int STEPS_PER_SECOND = 5000;
 
 static const float DC_BIAS = 1.5f;
 static const float V_PEAK_TO_PEAK = 3.0f;
